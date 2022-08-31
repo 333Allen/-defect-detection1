@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hdevelop file_version="1.2" halcon_version="21.11.0.0">
+<procedure name="main">
+<interface/>
+<body>
+<l>dev_update_off ()</l>
+<l>dev_close_window ()</l>
+<c></c>
+<l>read_image (Image0, 'C:/Users/Allen/Desktop/halcon_image/gogogo/1.jpg')</l>
+<l>* read_image (Image0, 'C:/Users/Allen/Desktop/halcon_image/gogogo/2.jpg')</l>
+<l>* read_image (Image0, 'C:/Users/Allen/Desktop/halcon_image/gogogo/3.jpg')</l>
+<l>* read_image (Image0, 'C:/Users/Allen/Desktop/halcon_image/gogogo/4.jpg')</l>
+<l>* read_image (Image0, 'C:/Users/Allen/Desktop/halcon_image/gogogo/5.jpg')</l>
+<c></c>
+<c></c>
+<l>rgb1_to_gray (Image0, Image)</l>
+<l>get_image_size (Image, Width, Height)</l>
+<c></c>
+<l>dev_open_window (0, 0, Width, Height, 'black', WindowHandle)</l>
+<l>set_display_font (WindowHandle, 150, 'mono', 'true', 'false')</l>
+<l>dev_set_draw ('fill')</l>
+<l>dev_set_line_width (3)</l>
+<l>dev_set_color ('red')</l>
+<c></c>
+<c>*先不缩小</c>
+<l>* a:=1/4</l>
+<l>* Width:=Width0*a</l>
+<l>* Height:=Height0*a</l>
+<l>* zoom_image_factor (GrayImage, Image, a, a, 'bilinear')</l>
+<c></c>
+<l>sigma1:=50</l>
+<l>* sigma2:=10</l>
+<l>gen_gauss_filter (ImageGauss, sigma1, sigma1, 0, 'n', 'dc_center', Width, Height)</l>
+<l>* gen_gauss_filter (ImageGauss1, sigma2, sigma2, 0, 'n', 'dc_center', Width, Height)</l>
+<l>* sub_image (ImageGauss1, ImageGauss1, ImageSub, 5, 0)</l>
+<c></c>
+<c>*优化快速傅里叶变换速度</c>
+<l>optimize_fft_speed (Width, Height, 'standard')</l>
+<c></c>
+<c>*空间域转频域</c>
+<l>fft_generic (Image, ImageFFT, 'to_freq', -1, 'none', 'dc_center', 'complex')</l>
+<c></c>
+<l>* convol_fft (ImageFFT, ImageSub, ImageConvol)</l>
+<l>convol_fft (ImageFFT, ImageGauss, ImageConvol)</l>
+<c>*频域转空间域</c>
+<l>fft_generic (ImageConvol, ImageFFT1, 'from_freq', 1, 'none', 'dc_center', 'byte')</l>
+<l>sub_image (Image, ImageFFT1, ImageSub1, 5, 400)</l>
+<c></c>
+<c>*-----方案一（第二张图不吃这套，效果不好，因为有数字挡着）-----*</c>
+<l>* median_image (ImageSub1, ImageMedian, 'circle', 1, 'mirrored')</l>
+<l>* emphasize (ImageMedian, ImageEmphasize, Width, Height, 1)</l>
+<l>* threshold (ImageEmphasize, Regions, 0, 135)</l>
+<l>* connection (Regions, ConnectedRegions)</l>
+<l>* select_shape (ConnectedRegions, SelectedRegions, 'area', 'and', 200, 50000)</l>
+<l>* count_obj (SelectedRegions, Number)</l>
+<c>*----------------------------------------------------------*</c>
+<c></c>
+<c></c>
+<c>*-----方案二（把图片上数字本身也当成缺陷，直接拿捏第二张图）-----*</c>
+<c>*预处理</c>
+<l>* gray_range_rect (ImageSub1, ImageResult, 10, 10)</l>
+<l>median_image (ImageSub1, ImageMedian, 'circle', 1, 'mirrored')</l>
+<l>emphasize (ImageMedian, ImageEmphasize, Width, Height, 1)</l>
+<l>gray_range_rect (ImageEmphasize, ImageResult, 5, 5)</l>
+<l>* emphasize (ImageMedian, ImageEmphasize, Width, Height, 1)</l>
+<c>*blob</c>
+<l>threshold (ImageResult, Regions, 240, 255)</l>
+<l>dilation_rectangle1 (Regions, RegionDilation, 1, 2)</l>
+<l>fill_up (RegionDilation, RegionFillUp)</l>
+<l>erosion_rectangle1 (RegionFillUp, RegionErosion, 1, 2)</l>
+<l>connection (RegionErosion, ConnectedRegions)</l>
+<l>select_shape (ConnectedRegions, SelectedRegions, 'area', 'and', 300, 50000)</l>
+<l>count_obj (SelectedRegions, Number)</l>
+<c></c>
+<l>* cooc_feature_image (SelectedRegions, ImageEmphasize, 6, 0, Energy, Correlation, Homogeneity, Contrast)</l>
+<c></c>
+<c>*把断开的缺陷连起来</c>
+<l>union1 (SelectedRegions, RegionUnion)</l>
+<l>closing_circle (RegionUnion, RegionClosing, 5)</l>
+<l>connection (RegionClosing, ConnectedRegions1)</l>
+<l>* select_shape (ConnectedRegions1, SelectedRegions1, 'area', 'and', 100, 50000)</l>
+<l>count_obj (ConnectedRegions1, Number1)</l>
+<l>area_center (ConnectedRegions1, Area, Row, Column)</l>
+<c></c>
+<c>*-----------------------------------------------------------*</c>
+<c></c>
+<c>*展示图片</c>
+<l>dev_display (Image0)</l>
+<l>Num:=|Area|</l>
+<l>if (Number)</l>
+<l>*     gen_circle_contour_xld (ContCircle, Row, Column, gen_tuple_const(Number,30), gen_tuple_const(Number,0), gen_tuple_const(Number,rad(360)), 'positive', 1)</l>
+<l>    ResultMessage := ['Not OK',Number + ' defect(s) found']</l>
+<l>    Color := ['red', 'black']</l>
+<l>    dev_display (ConnectedRegions1)</l>
+<l>else</l>
+<l>    ResultMessage := 'OK'</l>
+<l>    Color := 'forest green'</l>
+<l>endif</l>
+<l>disp_message (WindowHandle, ResultMessage, 'window', 12, 12, Color, 'true')</l>
+<c></c>
+<c></c>
+<c></c>
+<c></c>
+</body>
+<docu id="main">
+<parameters/>
+</docu>
+</procedure>
+</hdevelop>
